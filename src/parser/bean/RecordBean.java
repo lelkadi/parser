@@ -1,5 +1,7 @@
 package parser.bean;
 
+import java.util.Date;
+
 import org.apache.commons.lang3.builder.ReflectionToStringBuilder;
 
 /**
@@ -10,17 +12,26 @@ import org.apache.commons.lang3.builder.ReflectionToStringBuilder;
  */
 public class RecordBean {
 
-	String date;
+	Long id;
+	Date date;
 	String ip;
 	String request;
-	String status;
+	Integer status;
 	String userAgent;
 
-	public String getDate() {
+	public Long getId() {
+		return id;
+	}
+
+	public void setId(Long id) {
+		this.id = id;
+	}
+
+	public Date getDate() {
 		return date;
 	}
 
-	public void setDate(String date) {
+	public void setDate(Date date) {
 		this.date = date;
 	}
 
@@ -40,11 +51,11 @@ public class RecordBean {
 		this.request = request;
 	}
 
-	public String getStatus() {
+	public Integer getStatus() {
 		return status;
 	}
 
-	public void setStatus(String status) {
+	public void setStatus(Integer status) {
 		this.status = status;
 	}
 
