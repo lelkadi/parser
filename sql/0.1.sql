@@ -11,3 +11,11 @@ CREATE TABLE LOG_RECORD (
         user_agent VARCHAR(200) NOT NULL,
         PRIMARY KEY (id)
     );
+    
+-- CREATE TABLE RECORD
+CREATE TABLE BLOCKED_IP (
+        id INT NOT NULL AUTO_INCREMENT,
+        ip VARCHAR(20),
+        comment VARCHAR(150) NOT NULL,
+        PRIMARY KEY (id)
+    );

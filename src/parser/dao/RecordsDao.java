@@ -7,9 +7,13 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import constant.Constants;
+import parser.bean.BlockedIpBean;
 import parser.bean.RecordBean;
 
 /**
@@ -24,15 +28,6 @@ public class RecordsDao {
 	private PreparedStatement preparedStatement = null;
 	private ResultSet resultSet = null;
 
-	public RecordsDao() {
-		try {
-			Class.forName("com.mysql.jdbc.Driver");
-			connect = DriverManager.getConnection("jdbc:mysql://localhost/parser?" + "user=root&password=root");
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
-
 	/**
 	 * Inserts the elements of the given RecordBean list to the DB record table
 	 * in one DB call.
@@ -41,6 +36,9 @@ public class RecordsDao {
 	 */
 	public void addRecords(List<RecordBean> recordBeanList) throws Exception {
 		try {
+			Class.forName(Constants.driver);
+			connect = DriverManager.getConnection(Constants.dbString);
+
 			preparedStatement = connect.prepareStatement("INSERT INTO parser.log_record "
 					+ "(date, ip, request, status, user_agent) " + "VALUES (?, ?, ?, ?, ?)");
 
@@ -65,41 +63,24 @@ public class RecordsDao {
 		}
 	}
 
-	public List<RecordBean> getRecords() throws Exception {
-		List<RecordBean> recordBeanList = new ArrayList<>();
+	/**
+	 * INSERTs the given list of BlockedIpBeans to the db
+	 * 
+	 * @param blockedIpBeanList
+	 * @throws Exception
+	 */
+	public void addBlockedIps(List<BlockedIpBean> blockedIpBeanList) throws Exception {
 		try {
+			Class.forName(Constants.driver);
+			connect = DriverManager.getConnection(Constants.dbString);
+
 			preparedStatement = connect
-					.prepareStatement("SELECT id, date, ip, request, status, user_agent FROM log_records");
-			resultSet = preparedStatement.executeQuery();
+					.prepareStatement("INSERT INTO parser.blocked_ip " + "(ip, comment) " + "VALUES (?, ?)");
 
-			RecordBean recordBean;
-			while (resultSet.next()) {
-				recordBean = new RecordBean();
+			for (BlockedIpBean blockedIpBean : blockedIpBeanList) {
+				preparedStatement.setString(1, blockedIpBean.getIp());
+				preparedStatement.setString(2, blockedIpBean.getComment());
 
-				recordBean.setId(resultSet.getLong("id"));
-				recordBean.setDate(resultSet.getDate("date"));
-				recordBean.setIp(resultSet.getString("ip"));
-				recordBean.setRequest(resultSet.getString("request"));
-				recordBean.setStatus(resultSet.getInt("status"));
-				recordBean.setUserAgent(resultSet.getString("user_agent"));
-
-				recordBeanList.add(recordBean);
-			}
-		} catch (Exception e) {
-			throw e;
-		} finally {
-			close();
-		}
-
-		return recordBeanList;
-	}
-
-	public void deleteRecords(List<RecordBean> recordBeanList) throws Exception {
-		try {
-			preparedStatement = connect.prepareStatement("DELETE FROM log_record WHERE id= ?;");
-
-			for (RecordBean recordBean : recordBeanList) {
-				preparedStatement.setLong(1, recordBean.getId());
 				preparedStatement.addBatch();
 			}
 
@@ -110,6 +91,67 @@ public class RecordsDao {
 		} finally {
 			close();
 		}
+	}
+
+	/**
+	 * Gets the IPs that exceeded the given threshold starting from the given
+	 * startDate for the given duration.
+	 * 
+	 * @param startDate
+	 * @param duration
+	 * @param threshold
+	 * @return
+	 * @throws Exception
+	 */
+	public Map<String, Integer> getIpsExceedingThreshold(Date startDate, String duration, Integer threshold)
+			throws Exception {
+		Class.forName(Constants.driver);
+		connect = DriverManager.getConnection(Constants.dbString);
+
+		if (startDate == null || duration == null || threshold == null) {
+			System.out.println("Invalid parameters passed to getIpsExceedingThreshold()");
+			return null;
+		}
+
+		Map<String, Integer> ipsMap = new HashMap<String, Integer>();
+
+		// Calculate endDate
+		Date endDate;
+		switch (duration) {
+		case "hourly":
+			endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+			break;
+		case "daily":
+			endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
+			break;
+		default:
+			endDate = startDate;
+			break;
+		}
+
+		// Get IPs
+		try {
+			preparedStatement = connect.prepareStatement(
+					"SELECT ip, COUNT(id) AS count FROM log_record WHERE date >= ? AND date <= ? GROUP BY ip");
+
+			DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+			preparedStatement.setString(1, formatter.format(startDate));
+			preparedStatement.setString(2, formatter.format(endDate));
+			resultSet = preparedStatement.executeQuery();
+
+			// Return IPs exceeding the threshold
+			while (resultSet.next()) {
+				if (resultSet.getInt("count") >= 100) {
+					ipsMap.put(resultSet.getString("ip"), resultSet.getInt("count"));
+				}
+			}
+		} catch (Exception e) {
+			throw e;
+		} finally {
+			close();
+		}
+
+		return ipsMap;
 	}
 
 	// You need to close the resultSet
